@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-500 to-cyan-500 flex items-center justify-center">
               <Shield className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold gradient-text">SafelinkluX</span>
+            <span className="font-bold gradient-text">MediaShareOP1</span>
           </Link>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
         </div>

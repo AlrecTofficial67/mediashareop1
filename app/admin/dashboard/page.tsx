@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
           <div className="w-7 h-7 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center">
             <Shield className="w-4 h-4 text-red-400" />
           </div>
-          <span className="font-bold text-white">SafelinkluX Admin</span>
+          <span className="font-bold text-white">MediaShareOP1 Admin</span>
         </div>
         <button onClick={handleLogout} className="btn-ghost text-sm text-red-400 hover:text-red-300">
           <LogOut className="w-4 h-4" /> Logout

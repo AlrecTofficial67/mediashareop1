@@ -1,4 +1,4 @@
-# SafelinkluX
+# MediaShareOP1
 
 **Secure Modern File Sharing & Mission Link Platform**
 
@@ -9,7 +9,7 @@
 ## Folder Structure
 
 ```
-safelinklux/
+mediashareop1/
 ├── app/
 │   ├── (auth)/
 │   │   ├── login/page.tsx
@@ -65,8 +65,8 @@ pkg install nodejs-lts git
 
 ### 2. Clone & Install
 ```bash
-git clone https://github.com/yourusername/safelinklux.git
-cd safelinklux
+git clone https://github.com/yourusername/mediashareop1.git
+cd mediashareop1
 npm install
 ```
 

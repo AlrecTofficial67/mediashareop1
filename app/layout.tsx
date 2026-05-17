@@ -6,11 +6,11 @@ import { Toaster } from "react-hot-toast";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: { default: "SafelinkluX — Secure File Sharing & Mission Link Platform", template: "%s | SafelinkluX" },
+  title: { default: "MediaShareOP1 — Secure File Sharing & Mission Link Platform", template: "%s | MediaShareOP1" },
   description: "Modern secure file sharing and mission link platform. Upload files, create shortlinks, and earn through mission-gated content.",
   keywords: ["file sharing", "safelink", "shortlink", "mission", "download"],
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"),
-  openGraph: { type: "website", title: "SafelinkluX", description: "Secure Modern File Sharing & Mission Link Platform" },
+  openGraph: { type: "website", title: "MediaShareOP1", description: "Secure Modern File Sharing & Mission Link Platform" },
   robots: { index: true, follow: true },
 };
 

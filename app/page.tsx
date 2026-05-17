@@ -28,7 +28,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-cyan-500 flex items-center justify-center">
               <Shield className="w-4 h-4 text-white" />
             </div>
-            <span className="font-bold text-lg gradient-text">SafelinkluX</span>
+            <span className="font-bold text-lg gradient-text">MediaShareOP1</span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm text-slate-400">
             <Link href="#features" className="hover:text-white transition-colors">Features</Link>
@@ -148,9 +148,9 @@ export default function LandingPage() {
       <footer className="border-t border-surface-border/50 py-10 px-4 text-center text-sm text-slate-500">
         <div className="flex items-center justify-center gap-2 mb-3">
           <Shield className="w-4 h-4 text-brand-500" />
-          <span className="font-semibold text-slate-300">SafelinkluX</span>
+          <span className="font-semibold text-slate-300">MediaShareOP1</span>
         </div>
-        <p>© {new Date().getFullYear()} SafelinkluX. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} MediaShareOP1. All rights reserved.</p>
         <p className="mt-1 text-xs text-slate-600">Created by Alrect & AI Gemini</p>
       </footer>
     </main>
