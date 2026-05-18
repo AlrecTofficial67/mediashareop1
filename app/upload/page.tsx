@@ -11,6 +11,7 @@ export default function UploadPage() {
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [form, setForm] = useState({ title: "", description: "", missionEnabled: true });
   const [linkForm, setLinkForm] = useState({ targetUrl: "", title: "", missionEnabled: true });
 
@@ -25,25 +26,44 @@ export default function UploadPage() {
     e.preventDefault();
     if (!file) { toast.error("Select a file first"); return; }
     setUploading(true);
+    setProgress(0);
     try {
-      const fd = new FormData();
-      fd.append("files", file);
-      const upRes = await fetch("/api/uploadthing", { method: "POST", body: fd });
-      if (!upRes.ok) {
-        const err = await upRes.text();
-        throw new Error("Upload failed: " + err);
-      }
-      const upData = await upRes.json();
-      const fileData = Array.isArray(upData) ? upData[0] : upData?.data?.[0];
-      if (!fileData) throw new Error("No file data returned");
+      const presignRes = await fetch("/api/uploadthing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: [{ name: file.name, size: file.size, type: file.type || "application/octet-stream" }],
+        }),
+      });
+      if (!presignRes.ok) throw new Error("Failed to get upload URL");
+      const presignData = await presignRes.json();
+      const uploadData = presignData?.data?.[0] ?? presignData?.[0];
+      if (!uploadData?.url) throw new Error("No upload URL returned");
+
+      setProgress(20);
+
+      const xhr = new XMLHttpRequest();
+      await new Promise<void>((resolve, reject) => {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setProgress(20 + Math.round((e.loaded / e.total) * 70));
+        };
+        xhr.onload = () => xhr.status < 400 ? resolve() : reject(new Error("Upload failed"));
+        xhr.onerror = () => reject(new Error("Upload failed"));
+        xhr.open("PUT", uploadData.url);
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        xhr.send(file);
+      });
+
+      setProgress(90);
+
       const res = await fetch("/api/files/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title || file.name,
           description: form.description,
-          fileKey: fileData.key,
-          fileUrl: fileData.url,
+          fileKey: uploadData.key,
+          fileUrl: uploadData.fileUrl ?? `https://utfs.io/f/${uploadData.key}`,
           fileSize: file.size,
           mimeType: file.type || "application/octet-stream",
           originalName: file.name,
@@ -52,10 +72,12 @@ export default function UploadPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+      setProgress(100);
       toast.success("File uploaded!");
       router.push(`/f/${data.slug}`);
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(err.message ?? "Upload failed");
+      setProgress(0);
     } finally {
       setUploading(false);
     }
@@ -112,7 +134,7 @@ export default function UploadPage() {
                     <FileText className="w-8 h-8 text-brand-400" />
                     <div><p className="text-white font-medium text-sm">{file.name}</p><p className="text-slate-500 text-xs">{formatBytes(file.size)}</p></div>
                   </div>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); }} className="text-slate-500 hover:text-red-400 p-1"><X className="w-4 h-4" /></button>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); setProgress(0); }} className="text-slate-500 hover:text-red-400 p-1"><X className="w-4 h-4" /></button>
                 </div>
               ) : (
                 <>
@@ -122,6 +144,11 @@ export default function UploadPage() {
                 </>
               )}
             </div>
+            {uploading && (
+              <div className="w-full bg-surface-border rounded-full h-2">
+                <div className="bg-brand-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+              </div>
+            )}
             <input className="input" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
             <textarea className="input resize-none" rows={3} placeholder="Optional description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <label className="flex items-center gap-3 cursor-pointer">
@@ -132,7 +159,7 @@ export default function UploadPage() {
               <span className="text-sm text-slate-300">Enable mission gate</span>
             </label>
             <button type="submit" className="btn-primary w-full justify-center py-3" disabled={uploading || !file}>
-              {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : "Upload File"}
+              {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading {progress}%...</> : "Upload File"}
             </button>
           </form>
         ) : (
