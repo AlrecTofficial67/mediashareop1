@@ -1,12 +1,10 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Shield, Eye, EyeOff, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -23,7 +21,7 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Login failed");
       toast.success("Welcome back!");
-      router.push("/dashboard");
+      window.location.href = "/dashboard";
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -48,33 +46,19 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
-              <input
-                type="email"
-                className="input"
-                placeholder="you@example.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-                autoComplete="email"
-              />
+              <input type="email" className="input" placeholder="you@example.com"
+                value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required autoComplete="email" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">Password</label>
               <div className="relative">
-                <input
-                  type={showPass ? "text" : "password"}
-                  className="input pr-10"
-                  placeholder="••••••••"
-                  value={form.password}
+                <input type={showPass ? "text" : "password"} className="input pr-10"
+                  placeholder="••••••••" value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  required
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                >
+                  required autoComplete="current-password" />
+                <button type="button" onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
