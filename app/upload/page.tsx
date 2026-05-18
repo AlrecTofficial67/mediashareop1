@@ -3,7 +3,14 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, X, FileText, Loader2, Link2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { formatBytes } from "@/lib/utils";
+
+function formatBytes(bytes: number) {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
 
 export default function UploadPage() {
   const router = useRouter();
@@ -12,63 +19,62 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [form, setForm] = useState({ title: "", description: "", missionEnabled: true });
-  const [linkForm, setLinkForm] = useState({ targetUrl: "", title: "", missionEnabled: true });
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [missionEnabled, setMissionEnabled] = useState(true);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkTitle, setLinkTitle] = useState("");
 
   const CLOUD_NAME = "doku42ufq";
   const UPLOAD_PRESET = "mediashareop1";
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) { setFile(f); setForm(p => ({ ...p, title: p.title || f.name.replace(/\.[^.]+$/, "") })); }
-  }, []);
+  function pickFile(f: File) {
+    setFile(f);
+    setTitle(f.name.replace(/\.[^.]+$/, ""));
+  }
 
   async function handleFileUpload(e: React.FormEvent) {
     e.preventDefault();
-    if (!file) { toast.error("Select a file first"); return; }
+    if (!file) return;
     setUploading(true);
-    setProgress(0);
+    setProgress(5);
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("upload_preset", UPLOAD_PRESET);
-      fd.append("folder", "mediashareop1");
-
       const xhr = new XMLHttpRequest();
-      const result = await new Promise<any>((resolve, reject) => {
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 90));
+      const cloudRes = await new Promise<any>((resolve, reject) => {
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) setProgress(5 + Math.round((ev.loaded / ev.total) * 80));
         };
         xhr.onload = () => {
-          if (xhr.status < 400) resolve(JSON.parse(xhr.responseText));
-          else reject(new Error("Upload failed: " + xhr.responseText));
+          try { resolve(JSON.parse(xhr.responseText)); }
+          catch { reject(new Error(xhr.responseText)); }
         };
         xhr.onerror = () => reject(new Error("Network error"));
         xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`);
         xhr.send(fd);
       });
-
-      setProgress(95);
+      if (cloudRes.error) throw new Error(cloudRes.error.message);
+      setProgress(90);
       const res = await fetch("/api/files/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: form.title || file.name,
-          description: form.description,
-          fileKey: result.public_id,
-          fileUrl: result.secure_url,
+          title: title || file.name,
+          description,
+          fileKey: cloudRes.public_id,
+          fileUrl: cloudRes.secure_url,
           fileSize: file.size,
           mimeType: file.type || "application/octet-stream",
           originalName: file.name,
-          missionEnabled: form.missionEnabled,
+          missionEnabled,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) throw new Error(data.error ?? "Save failed");
       setProgress(100);
-      toast.success("File uploaded!");
+      toast.success("Uploaded!");
       router.push(`/f/${data.slug}`);
     } catch (err: any) {
       toast.error(err.message ?? "Upload failed");
@@ -85,7 +91,7 @@ export default function UploadPage() {
       const res = await fetch("/api/links", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(linkForm),
+        body: JSON.stringify({ targetUrl: linkUrl, title: linkTitle, missionEnabled }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -106,30 +112,36 @@ export default function UploadPage() {
           <p className="text-slate-400 text-sm mt-1">Upload a file or shorten a link</p>
         </div>
         <div className="flex gap-2 p-1 bg-surface-card border border-surface-border rounded-xl mb-6">
-          {[{ v: "file", icon: Upload, label: "Upload File" }, { v: "link", icon: Link2, label: "Shorten Link" }].map((t) => (
-            <button key={t.v} onClick={() => setMode(t.v as any)}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${mode === t.v ? "bg-brand-500 text-white" : "text-slate-400 hover:text-white"}`}>
-              <t.icon className="w-4 h-4" /> {t.label}
-            </button>
-          ))}
+          <button onClick={() => setMode("file")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${mode === "file" ? "bg-brand-500 text-white" : "text-slate-400"}`}>
+            <Upload className="w-4 h-4" /> Upload File
+          </button>
+          <button onClick={() => setMode("link")}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${mode === "link" ? "bg-brand-500 text-white" : "text-slate-400"}`}>
+            <Link2 className="w-4 h-4" /> Shorten Link
+          </button>
         </div>
+
         {mode === "file" ? (
           <form onSubmit={handleFileUpload} className="space-y-4">
-            <div onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)} onDrop={onDrop}
-              onClick={() => !file && document.getElementById("file-input")?.click()}
-              className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer ${dragging ? "border-brand-500 bg-brand-500/5" : "border-surface-border hover:border-brand-500/50"}`}>
-              <input id="file-input" type="file" className="hidden" onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) { setFile(f); setForm(p => ({ ...p, title: p.title || f.name.replace(/\.[^.]+$/, "") })); }
-              }} />
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) pickFile(f); }}
+              onClick={() => !file && document.getElementById("fi")?.click()}
+              className={`border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${dragging ? "border-brand-500 bg-brand-500/5" : "border-surface-border hover:border-brand-500/50"}`}>
+              <input id="fi" type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickFile(f); }} />
               {file ? (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 text-left">
                     <FileText className="w-8 h-8 text-brand-400" />
-                    <div><p className="text-white font-medium text-sm">{file.name}</p><p className="text-slate-500 text-xs">{formatBytes(file.size)}</p></div>
+                    <div>
+                      <p className="text-white font-medium text-sm">{file.name}</p>
+                      <p className="text-slate-500 text-xs">{formatBytes(file.size)}</p>
+                    </div>
                   </div>
-                  <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); setProgress(0); }} className="text-slate-500 hover:text-red-400 p-1"><X className="w-4 h-4" /></button>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); setFile(null); setProgress(0); }}
+                    className="text-slate-500 hover:text-red-400"><X className="w-4 h-4" /></button>
                 </div>
               ) : (
                 <>
@@ -141,34 +153,34 @@ export default function UploadPage() {
             </div>
             {progress > 0 && (
               <div className="w-full bg-surface-border rounded-full h-2">
-                <div className="bg-brand-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+                <div className="bg-brand-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
               </div>
             )}
-            <input className="input" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-            <textarea className="input resize-none" rows={3} placeholder="Optional description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <input className="input" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
+            <textarea className="input resize-none" rows={3} placeholder="Description (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
             <label className="flex items-center gap-3 cursor-pointer">
-              <div onClick={() => setForm({ ...form, missionEnabled: !form.missionEnabled })}
-                className={`w-10 h-5 rounded-full transition-colors relative ${form.missionEnabled ? "bg-brand-500" : "bg-surface-border"}`}>
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.missionEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+              <div onClick={() => setMissionEnabled(!missionEnabled)}
+                className={`w-10 h-5 rounded-full relative transition-colors ${missionEnabled ? "bg-brand-500" : "bg-surface-border"}`}>
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${missionEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
               </div>
               <span className="text-sm text-slate-300">Enable mission gate</span>
             </label>
-            <button type="submit" className="btn-primary w-full justify-center py-3" disabled={uploading || !file}>
+            <button type="submit" disabled={uploading || !file} className="btn-primary w-full justify-center py-3">
               {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading {progress}%...</> : "Upload File"}
             </button>
           </form>
         ) : (
           <form onSubmit={handleLinkCreate} className="space-y-4">
-            <input className="input" placeholder="Title" value={linkForm.title} onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })} required />
-            <input className="input" type="url" placeholder="https://example.com" value={linkForm.targetUrl} onChange={(e) => setLinkForm({ ...linkForm, targetUrl: e.target.value })} required />
+            <input className="input" placeholder="Title" value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)} required />
+            <input className="input" type="url" placeholder="https://example.com" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} required />
             <label className="flex items-center gap-3 cursor-pointer">
-              <div onClick={() => setLinkForm({ ...linkForm, missionEnabled: !linkForm.missionEnabled })}
-                className={`w-10 h-5 rounded-full transition-colors relative ${linkForm.missionEnabled ? "bg-brand-500" : "bg-surface-border"}`}>
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${linkForm.missionEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+              <div onClick={() => setMissionEnabled(!missionEnabled)}
+                className={`w-10 h-5 rounded-full relative transition-colors ${missionEnabled ? "bg-brand-500" : "bg-surface-border"}`}>
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${missionEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
               </div>
               <span className="text-sm text-slate-300">Enable mission gate</span>
             </label>
-            <button type="submit" className="btn-primary w-full justify-center py-3" disabled={uploading}>
+            <button type="submit" disabled={uploading} className="btn-primary w-full justify-center py-3">
               {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create Link"}
             </button>
           </form>
