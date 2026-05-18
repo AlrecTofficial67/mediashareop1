@@ -1,11 +1,9 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Shield, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const [form, setForm] = useState({ username: "", password: "" });
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +19,7 @@ export default function AdminLoginPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Login failed");
       toast.success("Admin access granted");
-      router.push("/admin/dashboard");
+      window.location.href = "/admin/dashboard";
     } catch (err: any) {
       toast.error(err.message);
     } finally {
