@@ -3,7 +3,11 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, X, FileText, Loader2, Link2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { generateReactHelpers } from "@uploadthing/react";
+import type { OurFileRouter } from "@/app/api/uploadthing/route";
 import { formatBytes } from "@/lib/utils";
+
+const { useUploadThing } = generateReactHelpers<OurFileRouter>();
 
 export default function UploadPage() {
   const router = useRouter();
@@ -14,6 +18,42 @@ export default function UploadPage() {
   const [progress, setProgress] = useState(0);
   const [form, setForm] = useState({ title: "", description: "", missionEnabled: true });
   const [linkForm, setLinkForm] = useState({ targetUrl: "", title: "", missionEnabled: true });
+
+  const { startUpload } = useUploadThing("fileUploader", {
+    onUploadProgress: (p) => setProgress(p),
+    onClientUploadComplete: async (res) => {
+      if (!res?.[0]) { toast.error("Upload failed"); setUploading(false); return; }
+      const f2 = res[0];
+      try {
+        const saveRes = await fetch("/api/files/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: form.title,
+            description: form.description,
+            fileKey: f2.key,
+            fileUrl: f2.url,
+            fileSize: f2.size,
+            mimeType: file?.type || "application/octet-stream",
+            originalName: f2.name,
+            missionEnabled: form.missionEnabled,
+          }),
+        });
+        const data = await saveRes.json();
+        if (!saveRes.ok) throw new Error(data.error);
+        toast.success("File uploaded!");
+        router.push(`/f/${data.slug}`);
+      } catch (err: any) {
+        toast.error(err.message);
+      } finally {
+        setUploading(false);
+      }
+    },
+    onUploadError: (err) => {
+      toast.error(err.message);
+      setUploading(false);
+    },
+  });
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -27,60 +67,7 @@ export default function UploadPage() {
     if (!file) { toast.error("Select a file first"); return; }
     setUploading(true);
     setProgress(0);
-    try {
-      const presignRes = await fetch("/api/uploadthing", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          files: [{ name: file.name, size: file.size, type: file.type || "application/octet-stream" }],
-        }),
-      });
-      if (!presignRes.ok) throw new Error("Failed to get upload URL");
-      const presignData = await presignRes.json();
-      const uploadData = presignData?.data?.[0] ?? presignData?.[0];
-      if (!uploadData?.url) throw new Error("No upload URL returned");
-
-      setProgress(20);
-
-      const xhr = new XMLHttpRequest();
-      await new Promise<void>((resolve, reject) => {
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(20 + Math.round((e.loaded / e.total) * 70));
-        };
-        xhr.onload = () => xhr.status < 400 ? resolve() : reject(new Error("Upload failed"));
-        xhr.onerror = () => reject(new Error("Upload failed"));
-        xhr.open("PUT", uploadData.url);
-        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-        xhr.send(file);
-      });
-
-      setProgress(90);
-
-      const res = await fetch("/api/files/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: form.title || file.name,
-          description: form.description,
-          fileKey: uploadData.key,
-          fileUrl: uploadData.fileUrl ?? `https://utfs.io/f/${uploadData.key}`,
-          fileSize: file.size,
-          mimeType: file.type || "application/octet-stream",
-          originalName: file.name,
-          missionEnabled: form.missionEnabled,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setProgress(100);
-      toast.success("File uploaded!");
-      router.push(`/f/${data.slug}`);
-    } catch (err: any) {
-      toast.error(err.message ?? "Upload failed");
-      setProgress(0);
-    } finally {
-      setUploading(false);
-    }
+    await startUpload([file]);
   }
 
   async function handleLinkCreate(e: React.FormEvent) {
