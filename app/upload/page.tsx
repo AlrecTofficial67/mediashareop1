@@ -15,6 +15,9 @@ export default function UploadPage() {
   const [form, setForm] = useState({ title: "", description: "", missionEnabled: true });
   const [linkForm, setLinkForm] = useState({ targetUrl: "", title: "", missionEnabled: true });
 
+  const CLOUD_NAME = "doku42ufq";
+  const UPLOAD_PRESET = "mediashareop1";
+
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
@@ -26,27 +29,36 @@ export default function UploadPage() {
     e.preventDefault();
     if (!file) { toast.error("Select a file first"); return; }
     setUploading(true);
-    setProgress(10);
+    setProgress(0);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      setProgress(30);
-      const upRes = await fetch("/api/upload", { method: "POST", body: fd });
-      setProgress(70);
-      if (!upRes.ok) {
-        const err = await upRes.json();
-        throw new Error(err.error ?? "Upload failed");
-      }
-      const upData = await upRes.json();
-      setProgress(85);
+      fd.append("upload_preset", UPLOAD_PRESET);
+      fd.append("folder", "mediashareop1");
+
+      const xhr = new XMLHttpRequest();
+      const result = await new Promise<any>((resolve, reject) => {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 90));
+        };
+        xhr.onload = () => {
+          if (xhr.status < 400) resolve(JSON.parse(xhr.responseText));
+          else reject(new Error("Upload failed: " + xhr.responseText));
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`);
+        xhr.send(fd);
+      });
+
+      setProgress(95);
       const res = await fetch("/api/files/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title || file.name,
           description: form.description,
-          fileKey: upData.key,
-          fileUrl: upData.url,
+          fileKey: result.public_id,
+          fileUrl: result.secure_url,
           fileSize: file.size,
           mimeType: file.type || "application/octet-stream",
           originalName: file.name,
@@ -123,7 +135,7 @@ export default function UploadPage() {
                 <>
                   <Upload className="w-10 h-10 text-slate-600 mx-auto mb-3" />
                   <p className="text-slate-300 font-medium">Drop file here or click to browse</p>
-                  <p className="text-slate-500 text-sm mt-1">Max 4MB per file</p>
+                  <p className="text-slate-500 text-sm mt-1">Up to 2GB supported</p>
                 </>
               )}
             </div>
