@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, X, FileText, Loader2, Shield, Link2 } from "lucide-react";
+import { Upload, X, FileText, Loader2, Link2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatBytes } from "@/lib/utils";
 
@@ -18,8 +18,8 @@ export default function UploadPage() {
     e.preventDefault();
     setDragging(false);
     const f = e.dataTransfer.files[0];
-    if (f) { setFile(f); if (!form.title) setForm((p) => ({ ...p, title: f.name.replace(/\.[^.]+$/, "") })); }
-  }, [form.title]);
+    if (f) { setFile(f); setForm(p => ({ ...p, title: p.title || f.name.replace(/\.[^.]+$/, "") })); }
+  }, []);
 
   async function handleFileUpload(e: React.FormEvent) {
     e.preventDefault();
@@ -27,20 +27,25 @@ export default function UploadPage() {
     setUploading(true);
     try {
       const fd = new FormData();
-      fd.append("file", file);
+      fd.append("files", file);
       const upRes = await fetch("/api/uploadthing", { method: "POST", body: fd });
-      if (!upRes.ok) throw new Error("Upload failed");
+      if (!upRes.ok) {
+        const err = await upRes.text();
+        throw new Error("Upload failed: " + err);
+      }
       const upData = await upRes.json();
+      const fileData = Array.isArray(upData) ? upData[0] : upData?.data?.[0];
+      if (!fileData) throw new Error("No file data returned");
       const res = await fetch("/api/files/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title || file.name,
           description: form.description,
-          fileKey: upData[0].key,
-          fileUrl: upData[0].url,
+          fileKey: fileData.key,
+          fileUrl: fileData.url,
           fileSize: file.size,
-          mimeType: file.type,
+          mimeType: file.type || "application/octet-stream",
           originalName: file.name,
           missionEnabled: form.missionEnabled,
         }),
@@ -83,7 +88,6 @@ export default function UploadPage() {
           <h1 className="text-2xl font-bold text-white">Create</h1>
           <p className="text-slate-400 text-sm mt-1">Upload a file or shorten a link</p>
         </div>
-
         <div className="flex gap-2 p-1 bg-surface-card border border-surface-border rounded-xl mb-6">
           {[{ v: "file", icon: Upload, label: "Upload File" }, { v: "link", icon: Link2, label: "Shorten Link" }].map((t) => (
             <button key={t.v} onClick={() => setMode(t.v as any)}
@@ -92,16 +96,16 @@ export default function UploadPage() {
             </button>
           ))}
         </div>
-
         {mode === "file" ? (
           <form onSubmit={handleFileUpload} className="space-y-4">
-            <div
-              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={onDrop}
+            <div onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)} onDrop={onDrop}
               onClick={() => !file && document.getElementById("file-input")?.click()}
-              className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer ${dragging ? "border-brand-500 bg-brand-500/5" : "border-surface-border hover:border-brand-500/50"} ${file ? "cursor-default" : ""}`}>
-              <input id="file-input" type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setForm((p) => ({ ...p, title: p.title || f.name.replace(/\.[^.]+$/, "") })); } }} />
+              className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer ${dragging ? "border-brand-500 bg-brand-500/5" : "border-surface-border hover:border-brand-500/50"}`}>
+              <input id="file-input" type="file" className="hidden" onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { setFile(f); setForm(p => ({ ...p, title: p.title || f.name.replace(/\.[^.]+$/, "") })); }
+              }} />
               {file ? (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 text-left">
@@ -118,28 +122,23 @@ export default function UploadPage() {
                 </>
               )}
             </div>
-            <div><label className="block text-sm font-medium text-slate-300 mb-1.5">Title</label>
-              <input className="input" placeholder="File title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></div>
-            <div><label className="block text-sm font-medium text-slate-300 mb-1.5">Description (optional)</label>
-              <textarea className="input resize-none" rows={3} placeholder="Optional description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+            <input className="input" placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+            <textarea className="input resize-none" rows={3} placeholder="Optional description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
             <label className="flex items-center gap-3 cursor-pointer">
               <div onClick={() => setForm({ ...form, missionEnabled: !form.missionEnabled })}
                 className={`w-10 h-5 rounded-full transition-colors relative ${form.missionEnabled ? "bg-brand-500" : "bg-surface-border"}`}>
                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.missionEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
               </div>
               <span className="text-sm text-slate-300">Enable mission gate</span>
-              <Shield className="w-4 h-4 text-brand-400" />
             </label>
             <button type="submit" className="btn-primary w-full justify-center py-3" disabled={uploading || !file}>
-              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Upload File"}
+              {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : "Upload File"}
             </button>
           </form>
         ) : (
           <form onSubmit={handleLinkCreate} className="space-y-4">
-            <div><label className="block text-sm font-medium text-slate-300 mb-1.5">Destination URL</label>
-              <input className="input" type="url" placeholder="https://example.com" value={linkForm.targetUrl} onChange={(e) => setLinkForm({ ...linkForm, targetUrl: e.target.value })} required /></div>
-            <div><label className="block text-sm font-medium text-slate-300 mb-1.5">Title</label>
-              <input className="input" placeholder="Link title" value={linkForm.title} onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })} required /></div>
+            <input className="input" placeholder="Title" value={linkForm.title} onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })} required />
+            <input className="input" type="url" placeholder="https://example.com" value={linkForm.targetUrl} onChange={(e) => setLinkForm({ ...linkForm, targetUrl: e.target.value })} required />
             <label className="flex items-center gap-3 cursor-pointer">
               <div onClick={() => setLinkForm({ ...linkForm, missionEnabled: !linkForm.missionEnabled })}
                 className={`w-10 h-5 rounded-full transition-colors relative ${linkForm.missionEnabled ? "bg-brand-500" : "bg-surface-border"}`}>
