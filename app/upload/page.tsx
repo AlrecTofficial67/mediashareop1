@@ -3,11 +3,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, X, FileText, Loader2, Link2 } from "lucide-react";
 import toast from "react-hot-toast";
-import { generateReactHelpers } from "@uploadthing/react";
-import type { OurFileRouter } from "@/app/api/uploadthing/route";
 import { formatBytes } from "@/lib/utils";
-
-const { useUploadThing } = generateReactHelpers<OurFileRouter>();
 
 export default function UploadPage() {
   const router = useRouter();
@@ -18,42 +14,6 @@ export default function UploadPage() {
   const [progress, setProgress] = useState(0);
   const [form, setForm] = useState({ title: "", description: "", missionEnabled: true });
   const [linkForm, setLinkForm] = useState({ targetUrl: "", title: "", missionEnabled: true });
-
-  const { startUpload } = useUploadThing("fileUploader", {
-    onUploadProgress: (p) => setProgress(p),
-    onClientUploadComplete: async (res) => {
-      if (!res?.[0]) { toast.error("Upload failed"); setUploading(false); return; }
-      const f2 = res[0];
-      try {
-        const saveRes = await fetch("/api/files/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: form.title,
-            description: form.description,
-            fileKey: f2.key,
-            fileUrl: f2.url,
-            fileSize: f2.size,
-            mimeType: file?.type || "application/octet-stream",
-            originalName: f2.name,
-            missionEnabled: form.missionEnabled,
-          }),
-        });
-        const data = await saveRes.json();
-        if (!saveRes.ok) throw new Error(data.error);
-        toast.success("File uploaded!");
-        router.push(`/f/${data.slug}`);
-      } catch (err: any) {
-        toast.error(err.message);
-      } finally {
-        setUploading(false);
-      }
-    },
-    onUploadError: (err) => {
-      toast.error(err.message);
-      setUploading(false);
-    },
-  });
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -66,8 +26,44 @@ export default function UploadPage() {
     e.preventDefault();
     if (!file) { toast.error("Select a file first"); return; }
     setUploading(true);
-    setProgress(0);
-    await startUpload([file]);
+    setProgress(10);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      setProgress(30);
+      const upRes = await fetch("/api/upload", { method: "POST", body: fd });
+      setProgress(70);
+      if (!upRes.ok) {
+        const err = await upRes.json();
+        throw new Error(err.error ?? "Upload failed");
+      }
+      const upData = await upRes.json();
+      setProgress(85);
+      const res = await fetch("/api/files/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title || file.name,
+          description: form.description,
+          fileKey: upData.key,
+          fileUrl: upData.url,
+          fileSize: file.size,
+          mimeType: file.type || "application/octet-stream",
+          originalName: file.name,
+          missionEnabled: form.missionEnabled,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setProgress(100);
+      toast.success("File uploaded!");
+      router.push(`/f/${data.slug}`);
+    } catch (err: any) {
+      toast.error(err.message ?? "Upload failed");
+      setProgress(0);
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleLinkCreate(e: React.FormEvent) {
@@ -127,11 +123,11 @@ export default function UploadPage() {
                 <>
                   <Upload className="w-10 h-10 text-slate-600 mx-auto mb-3" />
                   <p className="text-slate-300 font-medium">Drop file here or click to browse</p>
-                  <p className="text-slate-500 text-sm mt-1">Max 100MB (free) · 2GB (premium)</p>
+                  <p className="text-slate-500 text-sm mt-1">Max 4MB per file</p>
                 </>
               )}
             </div>
-            {uploading && (
+            {progress > 0 && (
               <div className="w-full bg-surface-border rounded-full h-2">
                 <div className="bg-brand-500 h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
